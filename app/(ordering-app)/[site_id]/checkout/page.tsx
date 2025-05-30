@@ -12,7 +12,7 @@ const stripePromise = loadStripe(
 );
 
 export default function CheckoutPage() {
-  const { cartItems } = useCartStore();
+  const { cartItems, clearCart } = useCartStore();
   const [clientSecret, setClientSecret] = useState<string>("");
   const [error, setError] = useState<string>("");
   const location = useLocationStore();
@@ -60,6 +60,10 @@ export default function CheckoutPage() {
     createPaymentIntent();
   }, [cartItems]);
 
+  const handlePaymentSuccess = () => {
+    clearCart(); // Clear the cart after successful payment
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4">
       {error && (
@@ -79,7 +83,7 @@ export default function CheckoutPage() {
             },
           }}
         >
-          <CheckoutForm clientSecret={clientSecret} onSuccess={()=>null} onError={(error)=> alert(error)} />
+          <CheckoutForm clientSecret={clientSecret} onSuccess={()=>handlePaymentSuccess} onError={(error)=> alert(error)} />
         </Elements>
       )}
     </div>

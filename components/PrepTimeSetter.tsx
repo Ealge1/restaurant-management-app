@@ -24,6 +24,11 @@ const PrepTimeSetter: FC<PrepTimeSetterProps> = ({
 }) => {
   const [prepTime, setPrepTime] = useState<number>(30); // Default 30 mins
 
+  const handleConfirm = () => {
+    onConfirm(prepTime);
+    onClose(); // Close the dialog after confirming
+  };
+
   return (
     <Dialog open={!!order} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
@@ -49,7 +54,7 @@ const PrepTimeSetter: FC<PrepTimeSetterProps> = ({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => onConfirm(prepTime)}>Confirm</Button>
+          <Button onClick={handleConfirm}>Confirm</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

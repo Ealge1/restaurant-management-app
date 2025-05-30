@@ -319,24 +319,30 @@ export async function GET(request: NextRequest) {
 
     results.forEach((result) => {
       if (result.status === "fulfilled") {
-        // `result.value` here is the fulfilled result from the inner Promise (from getOddsData)
-        // which also has a status property from its own try/catch
-        if (result.value && Array.isArray(result.value.value)) {
-          // Flatten the array of matches returned by getOddsData
-          allMatchData.push(...result.value.value);
-        } else if (result.value && result.value.status === "rejected") {
-          // This case should be handled by the catch in getOddsData and result.status === "rejected"
-          // but included for robustness if inner promises had different structure.
+        const value = result.value as {
+          status: string;
+          value: MatchData[];
+          sport: string;
+          market: string;
+          reason?: any;
+        };
+        if (value && Array.isArray(value.value)) {
+          allMatchData.push(...value.value);
+        } else if (value && value.status === "rejected") {
           console.warn(
-            `getOddsData promise was fulfilled but contained a rejection status for sport ${result.value.sport}, market ${result.value.market}:`,
-            result.value.reason
+            `getOddsData promise was fulfilled but contained a rejection status for sport ${value.sport}, market ${value.market}:`,
+            value.reason
           );
         }
       } else if (result.status === "rejected") {
-        // Log rejected promises, but don't stop the process
+        const reason = result.reason as {
+          sport: string;
+          market: string;
+          reason?: any;
+        };
         console.warn(
-          `Promise to fetch odds was rejected for sport ${result.reason.sport}, market ${result.reason.market}:`,
-          result.reason.reason || result.reason // Log the actual error or reason
+          `Promise to fetch odds was rejected for sport ${reason.sport}, market ${reason.market}:`,
+          reason.reason || reason
         );
       }
     });
@@ -523,7 +529,11 @@ export async function GET(request: NextRequest) {
 
           marketDescription = `${
             playerName ? playerName + " - " : ""
-          }${statType}${marketPoint !== undefined ? ` (${marketPoint})` : ""}`;
+          }${statType}${
+            market.outcomes[0]?.point !== undefined
+              ? ` (${market.outcomes[0].point})`
+              : ""
+          }`;
 
           // Format outcome names for display (e.g., "Over 25.5", "Under 25.5")
           outcomeDisplayNames = Object.entries(bestOddPerOutcome).map(

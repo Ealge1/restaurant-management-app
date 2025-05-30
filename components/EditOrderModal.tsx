@@ -13,12 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, PlusCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from "next/image";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 // Use the same interfaces as CreateOrderModal
 interface Modifier {
@@ -41,13 +36,14 @@ interface ModifierGroup {
 }
 
 interface OrderItem {
+  id?: string;
   name: string;
   quantity: number;
   price: number;
-  notes?: string;
-  id?: string;
+  modifiers?: any[];
+  notes?: string | null;
+  itemId?: string | null;
   imageUrl?: string;
-  modifiers?: ModifierWithQuantity[];
 }
 
 interface MenuItem {
@@ -100,7 +96,7 @@ async function getSiteMenu() {
       throw new Error(`Failed to fetch menu: ${response.statusText}`);
     }
 
-    return await response.json() as Menu[];
+    return (await response.json()) as Menu[];
   } catch (error) {
     console.error("Error fetching menu:", error);
     throw error;
@@ -122,8 +118,13 @@ export default function EditOrderModal({
 
   useEffect(() => {
     if (open) {
-      // Deep copy current items to allow modification without affecting original state
-      setItems(orderData.currentItems.map((item) => ({ ...item })) || []);
+      // Transform orderData.currentItems
+      const initialItems = orderData.currentItems.map((item) => ({
+        ...item,
+        // Ensure modifiers is ALWAYS an array, regardless of what it was before
+        modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
+      }));
+      setItems(initialItems);
       loadMenu();
     }
   }, [open, orderData.currentItems]);
@@ -178,6 +179,7 @@ export default function EditOrderModal({
           price: menuItem.price,
           quantity: 1,
           imageUrl: menuItem.imageUrl,
+          modifiers: [], // Initialize modifiers to an empty array
         };
         return [...prevItems, newItem];
       }
@@ -199,11 +201,15 @@ export default function EditOrderModal({
 
   const calculateSubtotal = () => {
     return items.reduce((sum, item) => {
-      const modifiersTotal = item.modifiers?.reduce(
-        (modSum, modifier) => modSum + modifier.price * modifier.quantity,
-        0
-      ) || 0;
-      return sum + (item.price * item.quantity) + modifiersTotal;
+      // Use Array.isArray to ensure we only operate on array values
+      const modifiersTotal = Array.isArray(item.modifiers)
+        ? item.modifiers.reduce(
+            (modSum, modifier) => modSum + modifier.price * modifier.quantity,
+            0
+          )
+        : 0;
+
+      return sum + item.price * item.quantity + modifiersTotal;
     }, 0);
   };
 
@@ -216,7 +222,8 @@ export default function EditOrderModal({
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto grid grid-cols-2 gap-6">
         <DialogHeader className="col-span-2">
           <DialogTitle>
-            Edit Order for {orderData.customerName} (#{orderData.orderId.substring(0, 8)})
+            Edit Order for {orderData.customerName} (
+            {orderData.orderId.substring(0, 8)})
           </DialogTitle>
         </DialogHeader>
 
@@ -247,12 +254,14 @@ export default function EditOrderModal({
                       <p className="text-sm text-gray-600">
                         ${item.price.toFixed(2)}
                       </p>
-                      {item.modifiers?.map((modifier, modIndex) => (
-                        <p key={modIndex} className="text-xs text-gray-500">
-                          {modifier.name} x{modifier.quantity} (+$
-                          {(modifier.price * modifier.quantity).toFixed(2)})
-                        </p>
-                      ))}
+                      {/* Use Array.isArray to ensure we're only mapping over arrays */}
+                      {Array.isArray(item.modifiers) &&
+                        item.modifiers.map((modifier, modIndex) => (
+                          <p key={modIndex} className="text-xs text-gray-500">
+                            {modifier.name} x{modifier.quantity} (+
+                            {(modifier.price * modifier.quantity).toFixed(2)})
+                          </p>
+                        ))}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

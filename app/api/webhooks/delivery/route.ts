@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { DeliveryStatus } from "@prisma/client";
 import * as crypto from "crypto";
+import { Prisma } from "@prisma/client";
 
 // Your Uber Direct webhook signing key
 const WEBHOOK_SECRET = "3b947192-f4e3-4779-8935-0eccfd892a4d";
@@ -11,19 +12,17 @@ const WEBHOOK_SECRET = "3b947192-f4e3-4779-8935-0eccfd892a4d";
 export async function POST(req: NextRequest) {
   // First, get the raw request body for signature verification
   const rawBody = await req.text();
-  
+
   try {
     // Get the signature from headers
-    const signature = req.headers.get("x-uber-signature") || 
-                      req.headers.get("x-postmates-signature");
-    
+    const signature =
+      req.headers.get("x-uber-signature") ||
+      req.headers.get("x-postmates-signature");
+
     // Verify webhook signature
     if (!verifyWebhookSignature(rawBody, signature)) {
       console.error("Invalid webhook signature");
-      return NextResponse.json(
-        { error: "Invalid signature" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     // Parse the body as JSON after verification
@@ -86,7 +85,10 @@ export async function POST(req: NextRequest) {
 }
 
 // Function to verify webhook signature
-function verifyWebhookSignature(payload: string, signature?: string | null): boolean {
+function verifyWebhookSignature(
+  payload: string,
+  signature?: string | null
+): boolean {
   if (!signature) {
     console.error("No signature provided in webhook");
     return false;
@@ -98,11 +100,11 @@ function verifyWebhookSignature(payload: string, signature?: string | null): boo
       .createHmac("sha256", WEBHOOK_SECRET)
       .update(payload, "utf8")
       .digest("hex");
-    
+
     // Compare the signatures - using a constant-time comparison to prevent timing attacks
     return crypto.timingSafeEqual(
-      Buffer.from(computedSignature, 'hex'),
-      Buffer.from(signature, 'hex')
+      Buffer.from(computedSignature, "hex"),
+      Buffer.from(signature, "hex")
     );
   } catch (error) {
     console.error("Error verifying webhook signature:", error);
@@ -155,7 +157,7 @@ async function handleCourierUpdateWebhook(orderId: string, data: any) {
   console.log("Processing courier update webhook");
 
   const courierData = data.data.courier;
-  
+
   // Update the order with courier information
   await prisma.order.update({
     where: { id: orderId },
@@ -179,19 +181,20 @@ async function handleRefundWebhook(orderId: string, data: any) {
   console.log("Processing refund request webhook");
 
   const refundData = data.data;
-  
+
   // Calculate total refund amount
-  const totalRefundAmount = (refundData.total_partner_refund + refundData.total_uber_refund) / 100;
-  
+  const totalRefundAmount =
+    (refundData.total_partner_refund + refundData.total_uber_refund) / 100;
+
   // Extract refund item details if available
   const refundItems = refundData.refund_order_items?.map((item: any) => ({
     reason: item.reason,
     partyAtFault: item.party_at_fault,
     items: item.refund_items,
     partnerRefundAmount: item.partner_refund_amount / 100,
-    uberRefundAmount: item.uber_refund_amount / 100
+    uberRefundAmount: item.uber_refund_amount / 100,
   }));
-  
+
   // Update the order with refund information
   await prisma.order.update({
     where: { id: orderId },
@@ -199,9 +202,13 @@ async function handleRefundWebhook(orderId: string, data: any) {
       refundAmount: totalRefundAmount,
       refundReason: refundItems?.[0]?.reason || null,
       refundPartyAtFault: refundItems?.[0]?.partyAtFault || null,
-      refundItems: refundItems ? JSON.stringify(refundItems) : null,
-      refundFees: refundData.refund_fees ? JSON.stringify(refundData.refund_fees) : null,
-      refundedAt: refundData.created_at ? new Date(refundData.created_at) : new Date(),
+      refundItems: refundItems ? JSON.stringify(refundItems) : Prisma.JsonNull,
+      refundFees: refundData.refund_fees
+        ? JSON.stringify(refundData.refund_fees)
+        : Prisma.JsonNull,
+      refundedAt: refundData.created_at
+        ? new Date(refundData.created_at)
+        : new Date(),
       lastUpdated: new Date(),
     },
   });

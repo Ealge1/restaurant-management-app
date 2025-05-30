@@ -1,15 +1,26 @@
 // app/api/create-payment-intent/route.ts
 import { stripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
-import { v4 as uuidv4 } from "uuid";
-import { getUberAuthToken, getUberDeliveryQuotes } from "@/lib/uber";
+import { headers } from "next/headers";
+import { redis } from "@/lib/redis";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { v4 as uuidv4 } from "uuid";
+import { updateOrdersCache, parseDeliveryAddress } from "@/app/lib/utils";
+import { getUberAuthToken, getUberDeliveryQuotes } from "@/lib/uber";
 import { CartItem, OrderStatus } from "@prisma/client";
-import { updateOrdersCache } from "../webhooks/stripe-webhook/route";
-import { parseDeliveryAddress } from "../create-checkout-session/route";
+
+interface CartItemWithModifiers {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  modifiers?: Array<{ price: number }>;
+  notes?: string;
+}
 
 // Helper to calculate totals and prepare item data
-function calculateTotals(cartItems) {
+function calculateTotals(cartItems: CartItemWithModifiers[]) {
   let subtotal = 0;
 
   for (const item of cartItems) {
@@ -41,11 +52,14 @@ export async function POST(req: Request) {
       recipientFirstName,
       recipientLastName,
       recipientPhone,
-      siteId // Store ID from the client
+      siteId, // Store ID from the client
     } = body;
 
     if (!cartItems || cartItems.length === 0) {
-      return NextResponse.json({ error: "Cart items are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Cart items are required" },
+        { status: 400 }
+      );
     }
 
     // Default values
@@ -62,10 +76,13 @@ export async function POST(req: Request) {
           state: "NY",
           city: "Rochester",
           zip_code: "14623",
-          country: "US"
+          country: "US",
         };
 
-        const dropoffAddress = parseDeliveryAddress(deliveryAddress, deliveryApt);
+        const dropoffAddress = parseDeliveryAddress(
+          deliveryAddress,
+          deliveryApt
+        );
         if (!dropoffAddress.zip_code) {
           return NextResponse.json(
             { error: "Valid delivery address with zip code is required" },
@@ -81,7 +98,7 @@ export async function POST(req: Request) {
         const deliveryQuote = await getUberDeliveryQuotes({
           authToken: auth.access_token,
           pickupAddress,
-          dropoffAddress
+          dropoffAddress,
         });
 
         if (deliveryQuote && typeof deliveryQuote.fee === "number") {
@@ -110,14 +127,16 @@ export async function POST(req: Request) {
     }
 
     // Prepare cart items for metadata (stringify to avoid size limits)
-    const cartItemsForMetadata = cartItems.map((item: CartItem) => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      modifiers: item.modifiers || [],
-      notes: item.notes || ""
-    }));
+    const cartItemsForMetadata = cartItems.map(
+      (item: CartItemWithModifiers) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        modifiers: item.modifiers || [],
+        notes: item.notes || "",
+      })
+    );
 
     // Create payment intent with complete metadata
     const paymentIntent = await stripe.paymentIntents.create({
@@ -139,12 +158,12 @@ export async function POST(req: Request) {
         recipientLastName: recipientLastName || "",
         recipientPhone: recipientPhone || "",
         deliveryQuoteId: deliveryQuoteId || "",
-        storeId: siteId || "" // Pass the site ID as store ID
-      }
+        storeId: siteId || "", // Pass the site ID as store ID
+      },
     });
 
     return NextResponse.json({
-      clientSecret: paymentIntent.client_secret
+      clientSecret: paymentIntent.client_secret,
     });
   } catch (error) {
     console.error("Error creating payment intent:", error);

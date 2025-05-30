@@ -90,11 +90,11 @@ export default function LandingPage() {
             {/* === UPDATED BUTTON === */}
             <Button size="lg" asChild>
               {/* Link to a demo request page or contact page */}
-              <Link href="/contact">Get a Free Demo</Link>
+              <Link href="/store/menu">Try it</Link>
             </Button>
             {/* === END UPDATED BUTTON === */}
             <Button size="lg" variant="outline" asChild>
-              <Link href="#features">See How It Works &darr;</Link>
+              <Link href="/store/menu">See How It Works &darr;</Link>
             </Button>
           </div>
         </div>

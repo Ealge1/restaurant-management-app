@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { OrderStatus } from "@prisma/client"; // Import the OrderStatus enum
 import { v4 as uuidv4, validate as uuidValidate } from "uuid"; // Import UUID validator
+import { updateOrdersCache } from "@/app/lib/utils";
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature")!;
@@ -126,7 +127,8 @@ async function handlePaymentIntentAmountCapturableUpdated(
       tip: tipAmount,
       deliveryFee,
       total,
-      customerName: `${metadata.recipientFirstName} ${metadata.recipientLastName}`.trim(),
+      customerName:
+        `${metadata.recipientFirstName} ${metadata.recipientLastName}`.trim(),
       customerPhone: metadata.recipientPhone,
       customerEmail: metadata.customerEmail,
       customerAddress: metadata.deliveryAddress,
@@ -165,7 +167,7 @@ async function handlePaymentIntentSucceeded(
       paymentStatus: paymentIntent.status,
     },
   });
-  
+
   console.log(`Updated order status for PI ${paymentIntent.id}`);
   await updateOrdersCache();
 }
@@ -175,8 +177,8 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
   await prisma.order.updateMany({
     where: { paymentIntentId: paymentIntent.id },
     data: {
-      status: "CANCELED",
-      paymentStatus: "failed",
+      status: OrderStatus.CANCELED,
+      paymentStatus: paymentIntent.status,
       notes: `Payment failed: ${paymentIntent.last_payment_error?.message}`,
     },
   });
@@ -189,53 +191,54 @@ async function handlePaymentIntentCanceled(
   await prisma.order.updateMany({
     where: { paymentIntentId: paymentIntent.id },
     data: {
-      status: "CANCELED",
-      paymentStatus: "canceled",
+      status: OrderStatus.CANCELED,
+      paymentStatus: paymentIntent.status,
     },
   });
   await updateOrdersCache();
 }
 
 // Helper function to parse the address string into required object
-function parseAddressString(addressString: string): {
+function parseAddressString(addressString: string | null): {
   streetAddress: string;
   city: string;
   state: string;
   zipCode: string;
   country: string;
 } {
-  // Split the address string by commas and trim each part
-  const parts = addressString.split(",").map((part) => part.trim());
-
-  // Assuming the address string is in the format: "Street Address, City, State ZipCode, Country"
-  const streetAddress = parts[0] || "";
-  const city = parts[1] || "";
-
-  // The last part is State ZipCode and Country, so we split that
-  const stateZipCodeAndCountry = parts[2] ? parts[2].split(" ") : [];
-  const state = stateZipCodeAndCountry[0] || ""; // E.g., "NY"
-  const zipCode = stateZipCodeAndCountry[1] || ""; // E.g., "14623"
-  const country = parts[3] || "US"; // Assuming it's US if not provided
-
-  return {
-    streetAddress,
-    city,
-    state,
-    zipCode,
-    country,
+  const defaultAddress = {
+    streetAddress: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "US",
   };
-}
 
-// Helper function to update the Redis cache
-export async function updateOrdersCache() {
+  if (!addressString) return defaultAddress;
+
   try {
-    const orders = await prisma.order.findMany({
-      include: { items: true },
-      orderBy: { createdAt: "desc" },
-    });
+    // Split the address string by commas and trim each part
+    const parts = addressString.split(",").map((part) => part.trim());
 
-    await redis.set("store_orders", JSON.stringify(orders));
-  } catch (error) {
-    console.error("Failed to update orders cache:", error);
+    // Assuming the address string is in the format: "Street Address, City, State ZipCode, Country"
+    const streetAddress = parts[0] || "";
+    const city = parts[1] || "";
+
+    // The last part is State ZipCode and Country, so we split that
+    const stateZipCodeAndCountry = parts[2] ? parts[2].split(" ") : [];
+    const state = stateZipCodeAndCountry[0] || ""; // E.g., "NY"
+    const zipCode = stateZipCodeAndCountry[1] || ""; // E.g., "14623"
+    const country = parts[3] || "US"; // Assuming it's US if not provided
+
+    return {
+      streetAddress,
+      city,
+      state,
+      zipCode,
+      country,
+    };
+  } catch (e) {
+    console.error("Failed to parse address string:", addressString, e);
+    return defaultAddress;
   }
 }

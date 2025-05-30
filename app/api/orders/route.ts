@@ -4,12 +4,11 @@ import { OrderStatus, PrismaClient } from "@prisma/client";
 import { Redis } from "@upstash/redis";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { updateOrdersCache } from "../webhooks/stripe-webhook/route";
+import { updateOrdersCache } from "@/app/lib/utils";
 import { v4 as uuidv4 } from "uuid";
 export async function GET(request: NextRequest) {
   try {
     // Check if we have cached orders
-
 
     // If no cache, fetch from database
     const orders = await prisma.order.findMany({
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log("orders", orders)
+    console.log("orders", orders);
 
     // Cache the result for 1 minute
     await redis.set("store_orders", JSON.stringify(orders));
@@ -33,12 +32,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(orders);
   } catch (error) {
     // console.error("Failed to fetch orders:", error);
-    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
-
+    return NextResponse.json(
+      { error: "Failed to fetch orders" },
+      { status: 500 }
+    );
   }
 }
-
-
 
 export async function POST(request: Request) {
   try {
@@ -54,7 +53,13 @@ export async function POST(request: Request) {
     } = body;
 
     // Validate required fields
-    if (!storeId || !customerName || !customerPhone || !items || items.length === 0) {
+    if (
+      !storeId ||
+      !customerName ||
+      !customerPhone ||
+      !items ||
+      items.length === 0
+    ) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -75,7 +80,6 @@ export async function POST(request: Request) {
     // Create the order
     const order = await prisma.order.create({
       data: {
-      
         orderNumber,
         status: OrderStatus.NEW,
         items: {

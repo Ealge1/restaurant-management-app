@@ -72,7 +72,7 @@ export function CreateCategoryForm({
         items: selectedItems,
       });
 
-      setSelectedItems([])
+      setSelectedItems([]);
       onSubmitSuccess();
       form.reset();
       setIsDialogOpen(false);
@@ -180,7 +180,7 @@ export function CreateCategoryForm({
                         <Image
                           width={10}
                           height={10}
-                          src={item.imageUrl}
+                          src={item.imageUrl || "/placeholder.png"}
                           alt={item.name}
                           className="h-10 w-10 rounded object-cover"
                         />
@@ -206,11 +206,15 @@ export function CreateCategoryForm({
                   ))}
                 </div>
 
-                <Button type="submit" className="w-full" onClick={(e) =>{
-                  e.preventDefault()
-                  setIsDialogOpen(false);
-                  onSubmit(form.getValues());
-                }}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsDialogOpen(false);
+                    onSubmit(form.getValues());
+                  }}
+                >
                   Create Category
                 </Button>
               </form>

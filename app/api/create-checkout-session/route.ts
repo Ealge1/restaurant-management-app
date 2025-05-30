@@ -5,44 +5,7 @@ import Stripe from "stripe";
 import { v4 as uuidv4 } from "uuid";
 import { getUberAuthToken, getUberDeliveryQuotes } from "@/lib/uber";
 import { redis } from "@/lib/redis";
-
-// Function to parse address string into required format
-export function parseDeliveryAddress(addressString: string, apt?: string) {
-  // Default return for safety
-  const defaultAddress = {
-    street_address: ["", ""],
-    state: "NY",
-    city: "Rochester",
-    zip_code: "14623",
-    country: "US",
-  };
-  
-  try {
-    if (!addressString) return defaultAddress;
-    
-    // Parse address like "293 River Meadow Drive, Rochester, NY, USA"
-    const parts = addressString.split(", ");
-    if (parts.length < 3) return defaultAddress;
-    
-    const streetAddress = parts[0];
-    const city = parts[1];
-    const stateCountryParts = parts[2].split(" ");
-    const state = stateCountryParts[0];
-    const zipCode = stateCountryParts.length > 1 ? stateCountryParts[1] : "14623";
-    const country = parts.length > 3 ? parts[3] : "US";
-    
-    return {
-      street_address: [streetAddress, apt || ""],
-      state,
-      city,
-      zip_code: zipCode,
-      country: country === "USA" ? "US" : country,
-    };
-  } catch (error) {
-    console.error("Error parsing address:", error);
-    return defaultAddress;
-  }
-}
+import { parseDeliveryAddress } from "@/app/lib/utils";
 
 export async function POST(req: Request) {
   try {
@@ -77,28 +40,34 @@ export async function POST(req: Request) {
           zip_code: "14623",
           country: "US",
         };
-        
+
         // Parse the delivery address string into the required format
-        const dropoffAddress = parseDeliveryAddress(deliveryAddress, deliveryApt);
-        
+        const dropoffAddress = parseDeliveryAddress(
+          deliveryAddress,
+          deliveryApt
+        );
+
         console.log("dropoff_address", deliveryAddress);
         console.log("delivery type", deliveryType);
         console.log("formatted dropoff address", dropoffAddress);
 
         const auth = await getUberAuthToken();
-        const uberQuote = await getUberDeliveryQuotes({ 
-          authToken: auth?.access_token, 
-          pickupAddress: pickupAddress, 
-          dropoffAddress: dropoffAddress 
+        const uberQuote = await getUberDeliveryQuotes({
+          authToken: auth?.access_token,
+          pickupAddress: pickupAddress,
+          dropoffAddress: dropoffAddress,
         });
 
         deliveryQuote = uberQuote;
       } catch (deliveryError: any) {
         console.error("Error creating delivery quote:", deliveryError);
-        return NextResponse.json({
-          error: "Failed to create delivery quote",
-          details: deliveryError.message,
-        }, { status: 500 });
+        return NextResponse.json(
+          {
+            error: "Failed to create delivery quote",
+            details: deliveryError.message,
+          },
+          { status: 500 }
+        );
       }
     }
 
@@ -134,7 +103,7 @@ export async function POST(req: Request) {
             // Use existing Stripe price for modifiers
             line_items.push({
               price: modifier.stripePriceId,
-              quantity: item.quantity,  // important to multiply by main item quantity
+              quantity: item.quantity, // important to multiply by main item quantity
             });
           } else {
             // Create price on-the-fly for modifiers
@@ -142,12 +111,12 @@ export async function POST(req: Request) {
               price_data: {
                 currency: "usd",
                 product_data: {
-                  name: `${item.name} - ${modifier.name}`,  // naming them clearly
+                  name: `${item.name} - ${modifier.name}`, // naming them clearly
                   description: modifier.description || undefined,
                 },
-                unit_amount: Math.round(modifier.price * 100),  // Convert to cents
+                unit_amount: Math.round(modifier.price * 100), // Convert to cents
               },
-              quantity: item.quantity,  // multiply by main item quantity
+              quantity: item.quantity, // multiply by main item quantity
             });
           }
         }
@@ -155,7 +124,11 @@ export async function POST(req: Request) {
     }
 
     // 3. Add delivery fee ONLY if deliveryType is delivery and we have a valid quote
-    if (deliveryType === "delivery" && deliveryQuote && typeof deliveryQuote.fee === 'number') {
+    if (
+      deliveryType === "delivery" &&
+      deliveryQuote &&
+      typeof deliveryQuote.fee === "number"
+    ) {
       const feeValue = Number(deliveryQuote.fee);
       if (!isNaN(feeValue) && Number.isInteger(feeValue) && feeValue > 0) {
         console.log("Adding delivery fee:", feeValue);
@@ -171,12 +144,20 @@ export async function POST(req: Request) {
           quantity: 1,
         });
       } else {
-        console.warn("Invalid delivery fee amount:", deliveryQuote.fee, "Type:", typeof deliveryQuote.fee);
+        console.warn(
+          "Invalid delivery fee amount:",
+          deliveryQuote.fee,
+          "Type:",
+          typeof deliveryQuote.fee
+        );
       }
     } else if (deliveryType === "delivery") {
-      console.warn("Delivery quote or fee is missing or not a number, Type:", typeof deliveryQuote?.fee);
+      console.warn(
+        "Delivery quote or fee is missing or not a number, Type:",
+        typeof deliveryQuote?.fee
+      );
     }
-   
+
     // Check if we have valid line items
     if (line_items.length === 0) {
       throw new Error("No valid line items provided");
@@ -194,7 +175,9 @@ export async function POST(req: Request) {
       return_url: "http://dumebi.localhost:3000",
       metadata: {
         deliveryType: deliveryType || "pickup",
-        selectedLocation: selectedLocation ? JSON.stringify(selectedLocation) : null,
+        selectedLocation: selectedLocation
+          ? JSON.stringify(selectedLocation)
+          : null,
         scheduledTime: scheduledTime || null,
         scheduledDate: scheduledDate || null,
         deliveryAddress: deliveryAddress || null,
@@ -205,7 +188,9 @@ export async function POST(req: Request) {
         recipientPhone: recipientPhone || null,
         // Store delivery quote info in metadata for reference
         deliveryQuoteId: deliveryQuote?.id || null,
-        deliveryFee: deliveryQuote?.fee ? (deliveryQuote.fee / 100).toFixed(2) : null,
+        deliveryFee: deliveryQuote?.fee
+          ? (deliveryQuote.fee / 100).toFixed(2)
+          : null,
       },
     });
     console.log("Created Checkout Session:", session);

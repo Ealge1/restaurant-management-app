@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, FC } from "react";
 
 // ShadCN UI Components
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -102,7 +102,15 @@ interface CreateOrderData {
 
 interface EditOrderData {
   orderId: string;
-  currentItems: OrderItem[];
+  currentItems: Array<{
+    id?: string;
+    name: string;
+    quantity: number;
+    price: number;
+    modifiers?: any[];
+    notes?: string | null;
+    itemId?: string | null;
+  }>;
   customerName: string;
   paymentIntentId: string | null;
 }
@@ -113,12 +121,17 @@ interface PrepTimeSetterProps {
   onConfirm: (prepTime: number) => void;
 }
 
-const PrepTimeSetter: React.FC<PrepTimeSetterProps> = ({
+const PrepTimeSetter: FC<PrepTimeSetterProps> = ({
   order,
   onClose,
   onConfirm,
 }) => {
-  const [prepTime, setPrepTime] = useState<number>(30);
+  const [prepTime, setPrepTime] = useState<number>(30); // Default 30 mins
+
+  const handleConfirm = () => {
+    onConfirm(prepTime);
+    onClose(); // Close the dialog after confirming
+  };
 
   return (
     <Dialog open={!!order} onOpenChange={onClose}>
@@ -134,9 +147,9 @@ const PrepTimeSetter: React.FC<PrepTimeSetterProps> = ({
             <Input
               type="number"
               value={prepTime}
-              onChange={(e) => setPrepTime(Number(e.target.value))}
+              onChange={(e) => setPrepTime(parseInt(e.target.value, 10))}
               className="mr-2"
-              min={1}
+              min="1"
             />
             <span>minutes</span>
           </div>
@@ -145,7 +158,7 @@ const PrepTimeSetter: React.FC<PrepTimeSetterProps> = ({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => onConfirm(prepTime)}>Confirm</Button>
+          <Button onClick={handleConfirm}>Confirm</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -418,11 +431,11 @@ const OrdersPage = () => {
       )
     )
       return;
-  
+
     const originalOrder = { ...activeOrder };
     const originalOrders = [...orders];
     const originalTab = activeTab;
-  
+
     setActiveOrder({ ...activeOrder, status: "CANCELED" });
     setOrders((prevOrders) =>
       prevOrders.map((order) =>
@@ -430,16 +443,16 @@ const OrdersPage = () => {
       )
     );
     setActiveTab("completed");
-  
+
     try {
       const response = await fetch(`/api/orders/${orderId}/cancel`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ id: orderId }), // Send orderId in the request body
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to cancel order");
@@ -457,7 +470,6 @@ const OrdersPage = () => {
       );
     }
   };
-  
 
   const handleCreateOrder = async (orderData: CreateOrderData) => {
     try {
@@ -504,32 +516,35 @@ const OrdersPage = () => {
     setShowEditOrderModal(true);
   };
 
-  const handleUpdateOrder = async (updatedItems: OrderItem[], notes?: string) => {
+  const handleUpdateOrder = async (
+    updatedItems: OrderItem[],
+    notes?: string
+  ) => {
     if (!orderToEdit || !orderToEdit.paymentIntentId) {
       alert("Cannot update order: Missing required information.");
       return;
     }
-  
+
     try {
       // Make sure we have the orderId
       const orderId = orderToEdit.orderId;
       console.log("Updating order with ID:", orderId);
-      
+
       const response = await fetch(`/api/orders/${orderId}/edit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           id: orderId, // Explicitly include the ID
           items: updatedItems,
-          notes: notes
+          notes: notes,
         }),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to update order");
       }
-  
+
       setShowEditOrderModal(false);
       setOrderToEdit(null);
       await fetchOrders();
@@ -542,7 +557,6 @@ const OrdersPage = () => {
       );
     }
   };
-  
 
   const getDeliveryStatusColor = (status?: string | null) => {
     if (!status) return "bg-gray-100 text-gray-800";
@@ -722,7 +736,9 @@ const OrdersPage = () => {
 
       <Tabs
         value={activeTab}
-        onValueChange={setActiveTab}
+        onValueChange={(value: string) =>
+          setActiveTab(value as "new" | "inProgress" | "completed")
+        }
         className="w-full bg-white shrink-0"
       >
         <TabsList className="grid w-full grid-cols-3 border-b">
@@ -963,11 +979,7 @@ const OrdersPage = () => {
                           {item.quantity}x
                         </div>
                         <div className="flex-1 px-2">{item.name}</div>
-                        <div
-                          className="w-16 text-
-
-right"
-                        >
+                        <div className="w-16 text-right">
                           ${(item.price * item.quantity).toFixed(2)}
                         </div>
                       </div>

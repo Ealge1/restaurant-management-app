@@ -39,7 +39,7 @@ export function EditCategoryForm({
   onOpenChange,
   onSuccess,
 }: {
-  category: Category  & { items: Item[] }; // Explicitly include the items relation;
+  category: Category & { items: Item[] }; // Explicitly include the items relation;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -56,7 +56,7 @@ export function EditCategoryForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: category.name,
-      description: category.description,
+      description: category.description || "",
     },
   });
 
@@ -179,7 +179,7 @@ export function EditCategoryForm({
                       <Image
                         width={10}
                         height={10}
-                        src={item.imageUrl}
+                        src={item.imageUrl || "/placeholder.png"}
                         alt={item.name}
                         className="h-10 w-10 rounded object-cover"
                       />
