@@ -4,8 +4,9 @@ import { stripe } from "@/lib/stripe";
 export default async function SuccessPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string };
+  searchParams: Promise<{ [key: string]: string }>;
 }) {
+  searchParams = await searchParams;
   const paymentIntentId = searchParams.payment_intent;
 
   if (!paymentIntentId) redirect("/");
