@@ -10,7 +10,7 @@ import { stripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { getUberAuthToken, getUberDeliveryQuotes } from "@/lib/uber";
 import { prisma } from "@/lib/prisma";
-import { parseDeliveryAddress } from "../create-checkout-session/route";
+import { parseDeliveryAddress } from "@/lib/address";
 
 // Tax rate — hardcoded for now. TODO: replace with Stripe Tax or per-store config.
 const TAX_RATE = 0.08;
