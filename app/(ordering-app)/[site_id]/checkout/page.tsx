@@ -18,20 +18,30 @@ export default function CheckoutPage() {
   const location = useLocationStore();
   const params = useParams();
   const siteId = params.site_id;
+
   useEffect(() => {
     if (!cartItems.length) return;
 
     const createPaymentIntent = async () => {
       try {
+        // Send ONLY ids, quantities, and selected modifier ids.
+        // No prices — the server looks those up from the database.
+        const safeCartItems = cartItems.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          modifierIds: (item.modifiers ?? []).flatMap((m) =>
+            // Each selected modifier may have a quantity > 1 (e.g. 2 extra cheese).
+            // Repeat its id so the server counts its price that many times.
+            Array.from({ length: m.quantity ?? 1 }, () => m.id)
+          ),
+          notes: (item as any).notes ?? "",
+        }));
+
         const response = await fetch("/api/create-payment-intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            cartItems: cartItems.map((item) => ({
-              ...item,
-              price: item.price,
-              modifiers: item.modifiers || [],
-            })),
+            cartItems: safeCartItems,
             deliveryType: location.deliveryType,
             deliveryAddress: location.deliveryAddress,
             deliveryApt: location.deliveryApt,
@@ -39,14 +49,18 @@ export default function CheckoutPage() {
             recipientFirstName: location.recipientFirstName,
             recipientLastName: location.recipientLastName,
             recipientPhone: location.recipientPhone,
-           // Add this if available
-            tipAmount: 0, // Set default or get from UI if you have a tip selector
+            tipAmount: 0, // TODO: wire up Tips.tsx selector
             siteId: siteId,
           }),
         });
-    
-        if (!response.ok) throw new Error("Payment failed to initialize");
-    
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.error || "Payment failed to initialize"
+          );
+        }
+
         const { clientSecret } = await response.json();
         setClientSecret(clientSecret);
       } catch (err) {
@@ -55,7 +69,6 @@ export default function CheckoutPage() {
         );
       }
     };
-    
 
     createPaymentIntent();
   }, [cartItems]);
@@ -79,7 +92,11 @@ export default function CheckoutPage() {
             },
           }}
         >
-          <CheckoutForm clientSecret={clientSecret} onSuccess={()=>null} onError={(error)=> alert(error)} />
+          <CheckoutForm
+            clientSecret={clientSecret}
+            onSuccess={() => null}
+            onError={(error) => alert(error)}
+          />
         </Elements>
       )}
     </div>
