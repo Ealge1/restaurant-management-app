@@ -5,17 +5,31 @@ import { updateOrdersCache } from "@/app/api/webhooks/stripe-webhook/route";
 import { NextRequest, NextResponse } from "next/server";
 import { OrderStatus, Prisma } from "@prisma/client";
 
+// TODO: Replace hardcoded 8% tax with Stripe Tax or per-store config (Fix #3)
+const TAX_RATE = 0.08;
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: paramId } = await params;
     const body = await request.json();
     const { items, notes } = body;
-    
+
     // Use id from body OR fallback to params.id
-    const id = body.id || params.id;
-    
+    const id = body.id || paramId;
+
+    if (!id) {
+      return NextResponse.json({ error: "Order ID missing" }, { status: 400 });
+    }
+    if (!Array.isArray(items)) {
+      return NextResponse.json(
+        { error: "items must be an array" },
+        { status: 400 }
+      );
+    }
+
     console.log(`Editing order ${id} with ${items.length} items`);
 
     // Get the current order
@@ -38,10 +52,11 @@ export async function POST(
 
     // Calculate new totals
     const subtotal = items.reduce(
-      (sum: number, item) => sum + item.price * item.quantity,
+      (sum: number, item: { price: number; quantity: number }) =>
+        sum + item.price * item.quantity,
       0
     );
-    const tax = subtotal * 0.08; // Assuming 8% tax rate
+    const tax = subtotal * TAX_RATE;
     const tipAmount = currentOrder.tip || 0;
     const deliveryFee = currentOrder.deliveryFee || 0;
     const total = subtotal + tax + tipAmount + deliveryFee;
@@ -56,33 +71,46 @@ export async function POST(
         const paymentIntent = await stripe.paymentIntents.retrieve(
           currentOrder.paymentIntentId
         );
-        
+
         const currentAmountInCents = paymentIntent.amount;
-        
+
         if (paymentIntent.status === "requires_capture") {
           if (newAmountInCents <= currentAmountInCents) {
-            console.log(`New amount ${newAmountInCents} is not greater than current amount ${currentAmountInCents}. No payment update needed.`);
+            console.log(
+              `New amount ${newAmountInCents} is not greater than current amount ${currentAmountInCents}. No payment update needed.`
+            );
             // For decreases or same amount, we don't need to do anything with the payment
-            // Just continue with the order update
           } else {
             // For increases, we need to use incrementAuthorization
-            console.log(`Incrementing authorization from ${currentAmountInCents} to ${newAmountInCents} cents`);
+            console.log(
+              `Incrementing authorization from ${currentAmountInCents} to ${newAmountInCents} cents`
+            );
             await stripe.paymentIntents.incrementAuthorization(
               currentOrder.paymentIntentId,
               {
-                amount: newAmountInCents
+                amount: newAmountInCents,
               }
             );
           }
-        } else if (["requires_payment_method", "requires_confirmation", "requires_action"].includes(paymentIntent.status)) {
+        } else if (
+          [
+            "requires_payment_method",
+            "requires_confirmation",
+            "requires_action",
+          ].includes(paymentIntent.status)
+        ) {
           // For these statuses, we can use the update method
-          console.log(`Updating payment intent amount to ${newAmountInCents} cents`);
+          console.log(
+            `Updating payment intent amount to ${newAmountInCents} cents`
+          );
           await stripe.paymentIntents.update(currentOrder.paymentIntentId, {
-            amount: newAmountInCents
+            amount: newAmountInCents,
           });
         } else {
           // For other statuses, just log and continue
-          console.log(`Payment intent is in status ${paymentIntent.status}, cannot update amount.`);
+          console.log(
+            `Payment intent is in status ${paymentIntent.status}, cannot update amount.`
+          );
         }
       } catch (stripeError: any) {
         console.error("Stripe payment update failed:", stripeError.message);
@@ -103,16 +131,22 @@ export async function POST(
       where: { id },
       data: {
         items: {
-          create: items.map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-            notes: item.notes || null,
-            // Properly handle modifiers for Prisma JSON field
-            modifiers: item.modifiers 
-              ? item.modifiers 
-              : Prisma.JsonNull,
-          })),
+          create: items.map(
+            (item: {
+              name: string;
+              quantity: number;
+              price: number;
+              notes?: string;
+              modifiers?: any;
+            }) => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+              notes: item.notes || null,
+              // Properly handle modifiers for Prisma JSON field
+              modifiers: item.modifiers ? item.modifiers : Prisma.JsonNull,
+            })
+          ),
         },
         subtotal,
         tax,
