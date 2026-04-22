@@ -2,7 +2,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OrderStatus } from "@prisma/client";
-import { updateOrdersCache } from "@/app/api/webhooks/stripe-webhook/route";
+import { updateOrdersCache } from "@/lib/orders-cache";
 import { stripe } from "@/lib/stripe";
 
 export async function POST(
