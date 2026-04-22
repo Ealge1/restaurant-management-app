@@ -1,10 +1,11 @@
+// app/api/webhooks/stripe-webhook/route.ts
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
-import { redis } from "@/lib/redis";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { OrderStatus } from "@prisma/client"; // Import the OrderStatus enum
-import { v4 as uuidv4, validate as uuidValidate } from "uuid"; // Import UUID validator
+import { OrderStatus } from "@prisma/client";
+import { validate as uuidValidate } from "uuid";
+import { updateOrdersCache } from "@/lib/orders-cache";
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature")!;
@@ -109,16 +110,16 @@ async function handlePaymentIntentAmountCapturableUpdated(
     if (storeId) {
       if (!uuidValidate(storeId)) {
         console.error("Invalid storeId in metadata:", metadata.storeId);
-        storeId = undefined; // Set to undefined if invalid
+        storeId = undefined;
       }
     } else {
       console.log("storeId is missing in metadata.");
-      storeId = undefined; // Set to undefined if missing
+      storeId = undefined;
     }
 
     const orderData = {
       orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      status: OrderStatus.NEW, // Use the enum value
+      status: OrderStatus.NEW,
       paymentIntentId: paymentIntent.id,
       paymentStatus: paymentIntent.status,
       subtotal,
@@ -126,19 +127,19 @@ async function handlePaymentIntentAmountCapturableUpdated(
       tip: tipAmount,
       deliveryFee,
       total,
-      customerName: `${metadata.recipientFirstName} ${metadata.recipientLastName}`.trim(),
+      customerName:
+        `${metadata.recipientFirstName} ${metadata.recipientLastName}`.trim(),
       customerPhone: metadata.recipientPhone,
       customerEmail: metadata.customerEmail,
       customerAddress: metadata.deliveryAddress,
       notes: metadata.deliveryInstructions,
-      storeId: metadata.storeId, // Use the validated storeId (can be undefined)
+      storeId: metadata.storeId,
       deliveryQuoteId: metadata.deliveryQuoteId,
       items: { create: orderItems },
     };
 
     console.log("Order data before Prisma create:", orderData);
 
-    // Create order
     const order = await prisma.order.create({
       data: orderData,
     });
@@ -158,14 +159,13 @@ async function handlePaymentIntentAmountCapturableUpdated(
 async function handlePaymentIntentSucceeded(
   paymentIntent: Stripe.PaymentIntent
 ) {
-  // Only update the existing order, don't create a new one
   await prisma.order.updateMany({
     where: { paymentIntentId: paymentIntent.id },
     data: {
       paymentStatus: paymentIntent.status,
     },
   });
-  
+
   console.log(`Updated order status for PI ${paymentIntent.id}`);
   await updateOrdersCache();
 }
@@ -194,48 +194,4 @@ async function handlePaymentIntentCanceled(
     },
   });
   await updateOrdersCache();
-}
-
-// Helper function to parse the address string into required object
-function parseAddressString(addressString: string): {
-  streetAddress: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-} {
-  // Split the address string by commas and trim each part
-  const parts = addressString.split(",").map((part) => part.trim());
-
-  // Assuming the address string is in the format: "Street Address, City, State ZipCode, Country"
-  const streetAddress = parts[0] || "";
-  const city = parts[1] || "";
-
-  // The last part is State ZipCode and Country, so we split that
-  const stateZipCodeAndCountry = parts[2] ? parts[2].split(" ") : [];
-  const state = stateZipCodeAndCountry[0] || ""; // E.g., "NY"
-  const zipCode = stateZipCodeAndCountry[1] || ""; // E.g., "14623"
-  const country = parts[3] || "US"; // Assuming it's US if not provided
-
-  return {
-    streetAddress,
-    city,
-    state,
-    zipCode,
-    country,
-  };
-}
-
-// Helper function to update the Redis cache
-export async function updateOrdersCache() {
-  try {
-    const orders = await prisma.order.findMany({
-      include: { items: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    await redis.set("store_orders", JSON.stringify(orders));
-  } catch (error) {
-    console.error("Failed to update orders cache:", error);
-  }
 }
