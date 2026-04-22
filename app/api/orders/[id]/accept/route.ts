@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getAccessToken } from "uber-direct/auth";
 import { createDeliveriesClient } from "uber-direct/deliveries";
-import { updateOrdersCache } from "@/app/api/webhooks/stripe-webhook/route";
+import { updateOrdersCache } from "@/lib/orders-cache";
 import { Order } from "@prisma/client";
 
 // Keep your parseAddressString function if needed
