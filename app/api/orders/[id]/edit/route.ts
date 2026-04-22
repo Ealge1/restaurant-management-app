@@ -1,7 +1,7 @@
 // app/api/orders/[id]/edit/route.ts
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
-import { updateOrdersCache } from "@/app/api/webhooks/stripe-webhook/route";
+import { updateOrdersCache } from "@/lib/orders-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { OrderStatus, Prisma } from "@prisma/client";
 
