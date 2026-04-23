@@ -1,16 +1,13 @@
-// /app/api/orders/route.js
+// app/api/orders/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { OrderStatus, PrismaClient } from "@prisma/client";
-import { Redis } from "@upstash/redis";
+import { OrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { updateOrdersCache } from "../webhooks/stripe-webhook/route";
-import { v4 as uuidv4 } from "uuid";
+import { updateOrdersCache } from "@/lib/orders-cache";
+
 export async function GET(request: NextRequest) {
   try {
     // Check if we have cached orders
-
-
     // If no cache, fetch from database
     const orders = await prisma.order.findMany({
       where: {
@@ -24,21 +21,18 @@ export async function GET(request: NextRequest) {
         createdAt: "desc",
       },
     });
-
-    console.log("orders", orders)
-
-    // Cache the result for 1 minute
+    console.log("orders", orders);
+    // Cache the result
     await redis.set("store_orders", JSON.stringify(orders));
-
     return NextResponse.json(orders);
   } catch (error) {
     // console.error("Failed to fetch orders:", error);
-    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
-
+    return NextResponse.json(
+      { error: "Failed to fetch orders" },
+      { status: 500 }
+    );
   }
 }
-
-
 
 export async function POST(request: Request) {
   try {
@@ -54,7 +48,13 @@ export async function POST(request: Request) {
     } = body;
 
     // Validate required fields
-    if (!storeId || !customerName || !customerPhone || !items || items.length === 0) {
+    if (
+      !storeId ||
+      !customerName ||
+      !customerPhone ||
+      !items ||
+      items.length === 0
+    ) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -62,11 +62,12 @@ export async function POST(request: Request) {
     }
 
     // Calculate order totals
+    // TODO: Replace hardcoded 8% tax with Stripe Tax or per-store config (Fix #3)
     const subtotal = items.reduce(
       (sum: number, item: any) => sum + item.price * item.quantity,
       0
     );
-    const tax = subtotal * 0.08; // Assuming 8% tax rate
+    const tax = subtotal * 0.08;
     const total = subtotal + tax;
 
     // Generate unique order number
@@ -75,7 +76,6 @@ export async function POST(request: Request) {
     // Create the order
     const order = await prisma.order.create({
       data: {
-      
         orderNumber,
         status: OrderStatus.NEW,
         items: {
@@ -101,9 +101,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update Redis cache if you're using it
+    // Update Redis cache
     await updateOrdersCache();
-
     return NextResponse.json(order);
   } catch (error) {
     console.error("Failed to create order:", error);
