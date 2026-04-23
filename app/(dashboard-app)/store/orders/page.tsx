@@ -154,9 +154,7 @@ const PrepTimeSetter: React.FC<PrepTimeSetterProps> = ({
 
 const OrdersPage = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    "new" | "inProgress" | "completed"
-  >("new");
+  const [activeTab, setActiveTab] = useState<string>("new");
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [prepTimeOrder, setPrepTimeOrder] = useState<Order | null>(null);
   const [newOrderAlertVisible, setNewOrderAlertVisible] = useState(false);
