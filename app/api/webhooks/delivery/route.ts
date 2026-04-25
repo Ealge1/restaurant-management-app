@@ -2,11 +2,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { DeliveryStatus } from "@prisma/client";
+import { DeliveryStatus, Prisma } from "@prisma/client";
 import * as crypto from "crypto";
 
 // Your Uber Direct webhook signing key
-const WEBHOOK_SECRET = "3b947192-f4e3-4779-8935-0eccfd892a4d";
+// TODO (security): move to process.env.UBER_WEBHOOK_SECRET — this should NOT be hardcoded
+const WEBHOOK_SECRET =
+  process.env.UBER_WEBHOOK_SECRET ||
+  "3b947192-f4e3-4779-8935-0eccfd892a4d";
 
 export async function POST(req: NextRequest) {
   // First, get the raw request body for signature verification
@@ -199,8 +202,8 @@ async function handleRefundWebhook(orderId: string, data: any) {
       refundAmount: totalRefundAmount,
       refundReason: refundItems?.[0]?.reason || null,
       refundPartyAtFault: refundItems?.[0]?.partyAtFault || null,
-      refundItems: refundItems ? JSON.stringify(refundItems) : null,
-      refundFees: refundData.refund_fees ? JSON.stringify(refundData.refund_fees) : null,
+      refundItems: refundItems ? JSON.stringify(refundItems) : Prisma.JsonNull,
+      refundFees: refundData.refund_fees ? JSON.stringify(refundData.refund_fees) : Prisma.JsonNull,
       refundedAt: refundData.created_at ? new Date(refundData.created_at) : new Date(),
       lastUpdated: new Date(),
     },
