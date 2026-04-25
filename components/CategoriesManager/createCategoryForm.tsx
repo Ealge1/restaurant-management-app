@@ -180,7 +180,7 @@ export function CreateCategoryForm({
                         <Image
                           width={10}
                           height={10}
-                          src={item.imageUrl}
+                          src={item.imageUrl || "/placeholder.png"}
                           alt={item.name}
                           className="h-10 w-10 rounded object-cover"
                         />
