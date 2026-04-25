@@ -11,7 +11,7 @@ async function syncItems() {
   for (const item of items) {
     if (!item.stripeProductId) {
       const product = await stripe.products.create({
-        name: item.displayName,
+        name: item.displayName || item.name || "Unnamed item",
         description: item.description || undefined,
       });
 
