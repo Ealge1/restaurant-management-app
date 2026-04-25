@@ -44,7 +44,7 @@ interface OrderItem {
   name: string;
   quantity: number;
   price: number;
-  notes?: string;
+  notes?: string | null;
   id?: string;
   imageUrl?: string;
   modifiers?: ModifierWithQuantity[];
