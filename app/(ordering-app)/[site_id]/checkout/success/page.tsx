@@ -6,9 +6,8 @@ export default async function SuccessPage({
 }: {
   searchParams: Promise<{ [key: string]: string }>;
 }) {
-  searchParams = await searchParams;
-  const paymentIntentId = searchParams.payment_intent;
-
+  const params = await searchParams;
+  const paymentIntentId = params.payment_intent;
   if (!paymentIntentId) redirect("/");
 
   const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
