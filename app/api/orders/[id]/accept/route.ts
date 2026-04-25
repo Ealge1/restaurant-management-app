@@ -126,9 +126,8 @@ export async function POST(
     if (order.customerAddress) {
       try {
         const token = await getAccessToken();
-        if (!token?.access_token) throw new Error("Failed to get Uber token");
+        if (!token) throw new Error("Failed to get Uber token");
         const deliveriesClient = createDeliveriesClient(token);
-
         // TODO: Pull pickup address from Store.locations instead of hardcoding (Fix #4)
         const pickupAddress = {
           street_address: ["376 Jefferson Rd", ""],
