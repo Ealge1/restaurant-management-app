@@ -5,7 +5,6 @@ import { stripe } from "@/lib/stripe";
 import { getAccessToken } from "uber-direct/auth";
 import { createDeliveriesClient } from "uber-direct/deliveries";
 import { updateOrdersCache } from "@/lib/orders-cache";
-import { Order } from "@prisma/client";
 
 // Keep your parseAddressString function if needed
 function parseAddressString(addressString: string | null): {
@@ -122,7 +121,15 @@ export async function POST(
     }
 
     // 4. Initiate Delivery (if applicable)
-    let deliveryDetails: Partial<Order> = {};
+    let deliveryDetails: {
+  deliveryId?: string;
+  uberStatus?: string;
+  uberTrackingUrl?: string;
+  estimatedPickupTime?: Date | null;
+  estimatedDropoffTime?: Date | null;
+  deliveryFee?: number | null;
+  notes?: string;
+} = {};
     if (order.customerAddress) {
       try {
         const token = await getAccessToken();
